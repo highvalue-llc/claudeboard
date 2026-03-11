@@ -130,6 +130,7 @@ function sendMessage(rawMessage) {
   const message = sanitizeInput(rawMessage);
   if (!message) return;
 
+  orchBuffer = ''; // reset buffer for each new message exchange
   conversationHistory.push({ role: 'user', content: message });
   if (broadcast) broadcast({ type: 'orchestrator:thinking' });
 

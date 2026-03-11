@@ -5,20 +5,6 @@
 
 'use strict';
 
-// ── Simple Markdown Renderer ─────────────────────────────────
-function renderMarkdown(text) {
-  return text
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/^### (.+)$/gm, '<strong>$1</strong>')
-    .replace(/^## (.+)$/gm, '<strong style="font-size:1.05em">$1</strong>')
-    .replace(/^# (.+)$/gm, '<strong style="font-size:1.1em">$1</strong>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/`(.+?)`/g, '<code style="background:rgba(227,198,154,0.15);padding:0 4px;border-radius:3px">$1</code>')
-    .replace(/^- (.+)$/gm, '• $1')
-    .replace(/^\d+\. (.+)$/gm, (_, item) => `• ${item}`)
-    .replace(/\n/g, '<br>');
-}
 
 // ── State ────────────────────────────────────────────────────
 const state = {
