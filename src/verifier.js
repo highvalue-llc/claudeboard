@@ -30,12 +30,14 @@ Review the relevant files in the current working directory. Respond with exactly
   broadcast({ type: 'task:verifying', taskId: task.id });
   updateTask(task.id, { status: 'verifying' });
 
-  // claude --print requires prompt as positional arg; use cmd /c on Windows to avoid shell:true
-  const spawnArgs = process.platform === 'win32'
-    ? ['cmd', ['/c', 'claude', '--permission-mode', 'bypassPermissions', '--print', prompt]]
-    : ['claude', ['--permission-mode', 'bypassPermissions', '--print', prompt]];
-
-  const proc = spawn(spawnArgs[0], spawnArgs[1], {
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+  const vTmpFile = path.join(os.tmpdir(), `cb-verify-${task.id}-${Date.now()}.txt`);
+  fs.writeFileSync(vTmpFile, prompt, 'utf8');
+  const isWinV = process.platform === 'win32';
+  const vShellCmd = `claude --permission-mode bypassPermissions --print < "${vTmpFile}"`;
+  const proc = spawn(isWinV ? 'cmd' : 'sh', [isWinV ? '/c' : '-c', vShellCmd], {
     cwd: process.cwd(),
     stdio: ['ignore', 'pipe', 'pipe'],
     shell: false,

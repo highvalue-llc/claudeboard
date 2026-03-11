@@ -1,5 +1,8 @@
 // src/orchestrator.js
 const { spawn } = require('child_process');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const { createTask, updateTask, getTask, getTasks, savePRD } = require('./store');
 const { runVerifier } = require('./verifier');
 const { notify } = require('./notifier');
@@ -153,16 +156,23 @@ Reglas:
 
   const fullPrompt = `${systemPrompt}\n\n--- CONVERSACIÓN ACTUAL ---\n${historyText}\n\nOrquestador:`;
 
-  // Use stdin to pass prompt — avoids Windows cmd line length limits
-  // shell:true needed on Windows to resolve .cmd files; args are all fixed strings (no user data)
-  const proc = spawn(CLAUDE_CMD, ['--permission-mode', 'bypassPermissions', '--print'], {
+  // Write prompt to temp file and use input redirection — works on Windows + Mac
+  // Avoids: (1) cmd line length limit, (2) special char escaping, (3) stdin hang
+  const tmpFile = path.join(os.tmpdir(), `cb-orch-${Date.now()}.txt`);
+  fs.writeFileSync(tmpFile, fullPrompt, 'utf8');
+
+  const isWin = process.platform === 'win32';
+  const shellCmd = isWin
+    ? `claude --permission-mode bypassPermissions --print < "${tmpFile}"`
+    : `claude --permission-mode bypassPermissions --print < "${tmpFile}"`;
+
+  const proc = spawn(isWin ? 'cmd' : 'sh', [isWin ? '/c' : '-c', shellCmd], {
     cwd: process.cwd(),
-    stdio: ['pipe', 'pipe', 'pipe'],
-    shell: process.platform === 'win32',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    shell: false,
   });
 
-  proc.stdin.write(fullPrompt, 'utf8');
-  proc.stdin.end();
+  proc.on('close', () => { try { fs.unlinkSync(tmpFile); } catch {} });
 
   let response = '';
 
@@ -206,14 +216,15 @@ Work in the current directory. Be thorough and follow best practices.`;
   updateTask(task.id, { status: 'in_progress' });
   if (broadcast) broadcast({ type: 'task:started', taskId: task.id });
 
-  const proc = spawn(CLAUDE_CMD, ['--permission-mode', 'bypassPermissions', '--print'], {
+  const taskTmpFile = path.join(os.tmpdir(), `cb-task-${task.id}-${Date.now()}.txt`);
+  fs.writeFileSync(taskTmpFile, prompt, 'utf8');
+  const isWin2 = process.platform === 'win32';
+  const taskShellCmd = `claude --permission-mode bypassPermissions --print < "${taskTmpFile}"`;
+  const proc = spawn(isWin2 ? 'cmd' : 'sh', [isWin2 ? '/c' : '-c', taskShellCmd], {
     cwd: process.cwd(),
-    stdio: ['pipe', 'pipe', 'pipe'],
-    shell: process.platform === 'win32',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    shell: false,
   });
-
-  proc.stdin.write(prompt);
-  proc.stdin.end();
 
   const timer = setTimeout(() => {
     if (!proc.killed) {
