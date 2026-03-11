@@ -1,9 +1,28 @@
 // src/verifier.js
 const { spawn } = require('child_process');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const { updateTask, createTask } = require('./store');
 const { notify } = require('./notifier');
 
-const CLAUDE_CMD = process.platform === 'win32' ? 'claude.cmd' : 'claude';
+function spawnClaude(prompt, cwd) {
+  const tmpFile = path.join(os.tmpdir(), `cb-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`);
+  fs.writeFileSync(tmpFile, prompt, { encoding: 'utf8' });
+  let child;
+  if (process.platform === 'win32') {
+    const psCmd = `Get-Content -Raw -Encoding UTF8 '${tmpFile}' | claude --permission-mode bypassPermissions --print`;
+    child = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', psCmd], {
+      cwd, stdio: ['ignore', 'pipe', 'pipe'], shell: false,
+    });
+  } else {
+    child = spawn('sh', ['-c', `claude --permission-mode bypassPermissions --print < '${tmpFile}'`], {
+      cwd, stdio: ['ignore', 'pipe', 'pipe'], shell: false,
+    });
+  }
+  child.on('close', () => { try { fs.unlinkSync(tmpFile); } catch (_) {} });
+  return child;
+}
 const MAX_FIELD_LEN = 2000;
 
 function sanitizeField(str) {
@@ -30,18 +49,7 @@ Review the relevant files in the current working directory. Respond with exactly
   broadcast({ type: 'task:verifying', taskId: task.id });
   updateTask(task.id, { status: 'verifying' });
 
-  const fs = require('fs');
-  const os = require('os');
-  const path = require('path');
-  const vTmpFile = path.join(os.tmpdir(), `cb-verify-${task.id}-${Date.now()}.txt`);
-  fs.writeFileSync(vTmpFile, prompt, 'utf8');
-  const isWinV = process.platform === 'win32';
-  const vShellCmd = `claude --permission-mode bypassPermissions --print < "${vTmpFile}"`;
-  const proc = spawn(isWinV ? 'cmd' : 'sh', [isWinV ? '/c' : '-c', vShellCmd], {
-    cwd: process.cwd(),
-    stdio: ['ignore', 'pipe', 'pipe'],
-    shell: false,
-  });
+  const proc = spawnClaude(prompt, process.cwd());
 
   let output = '';
 

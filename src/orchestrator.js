@@ -8,8 +8,32 @@ const { runVerifier } = require('./verifier');
 const { notify } = require('./notifier');
 const { scanProject } = require('./scanner');
 
-// Use claude.cmd on Windows so spawn() works without shell: true
-const CLAUDE_CMD = process.platform === 'win32' ? 'claude.cmd' : 'claude';
+// spawnClaude: writes prompt to temp file and pipes via PowerShell (Win) or sh (Mac/Linux)
+// This is the only reliable cross-platform way to pass long prompts to `claude --print`
+function spawnClaude(prompt, cwd) {
+  const tmpFile = path.join(os.tmpdir(), `cb-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`);
+  fs.writeFileSync(tmpFile, prompt, { encoding: 'utf8' });
+
+  let child;
+  if (process.platform === 'win32') {
+    // PowerShell pipes file content reliably on Windows (no cmd line length limit, no char escaping issues)
+    const psCmd = `Get-Content -Raw -Encoding UTF8 '${tmpFile}' | claude --permission-mode bypassPermissions --print`;
+    child = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', psCmd], {
+      cwd,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: false,
+    });
+  } else {
+    child = spawn('sh', ['-c', `claude --permission-mode bypassPermissions --print < '${tmpFile}'`], {
+      cwd,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: false,
+    });
+  }
+
+  child.on('close', () => { try { fs.unlinkSync(tmpFile); } catch (_) {} });
+  return child;
+}
 const MAX_INPUT_LEN = 10000;   // max user input chars
 const AGENT_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -156,23 +180,7 @@ Reglas:
 
   const fullPrompt = `${systemPrompt}\n\n--- CONVERSACIÓN ACTUAL ---\n${historyText}\n\nOrquestador:`;
 
-  // Write prompt to temp file and use input redirection — works on Windows + Mac
-  // Avoids: (1) cmd line length limit, (2) special char escaping, (3) stdin hang
-  const tmpFile = path.join(os.tmpdir(), `cb-orch-${Date.now()}.txt`);
-  fs.writeFileSync(tmpFile, fullPrompt, 'utf8');
-
-  const isWin = process.platform === 'win32';
-  const shellCmd = isWin
-    ? `claude --permission-mode bypassPermissions --print < "${tmpFile}"`
-    : `claude --permission-mode bypassPermissions --print < "${tmpFile}"`;
-
-  const proc = spawn(isWin ? 'cmd' : 'sh', [isWin ? '/c' : '-c', shellCmd], {
-    cwd: process.cwd(),
-    stdio: ['ignore', 'pipe', 'pipe'],
-    shell: false,
-  });
-
-  proc.on('close', () => { try { fs.unlinkSync(tmpFile); } catch {} });
+  const proc = spawnClaude(fullPrompt, process.cwd());
 
   let response = '';
 
@@ -216,15 +224,7 @@ Work in the current directory. Be thorough and follow best practices.`;
   updateTask(task.id, { status: 'in_progress' });
   if (broadcast) broadcast({ type: 'task:started', taskId: task.id });
 
-  const taskTmpFile = path.join(os.tmpdir(), `cb-task-${task.id}-${Date.now()}.txt`);
-  fs.writeFileSync(taskTmpFile, prompt, 'utf8');
-  const isWin2 = process.platform === 'win32';
-  const taskShellCmd = `claude --permission-mode bypassPermissions --print < "${taskTmpFile}"`;
-  const proc = spawn(isWin2 ? 'cmd' : 'sh', [isWin2 ? '/c' : '-c', taskShellCmd], {
-    cwd: process.cwd(),
-    stdio: ['ignore', 'pipe', 'pipe'],
-    shell: false,
-  });
+  const proc = spawnClaude(prompt, process.cwd());
 
   const timer = setTimeout(() => {
     if (!proc.killed) {
