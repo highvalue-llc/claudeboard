@@ -118,11 +118,16 @@ function sendMessage(rawMessage) {
 
   const systemPrompt = `Sos un orquestador experto de proyectos de software dentro de ClaudeBoard. Respondé SIEMPRE en español argentino, de forma casual y directa.${projectSection}
 
-Tu trabajo:
-1. Entrevistar al usuario para entender qué quiere construir (máximo 2-3 intercambios).
-2. Una vez que tenés suficiente contexto, generar un PRD y desglosarlo en tareas concretas.
+IMPORTANTE: Esta es una conversación EN CURSO. NO te presentes ni saludes de nuevo. Continuá directamente desde donde se dejó.
 
-Cuando estés listo para generar las tareas, incluí AMBOS bloques en tu respuesta:
+Tu trabajo:
+1. Leer el pedido del usuario y entenderlo. Si ya hay suficiente contexto, generá las tareas DIRECTAMENTE.
+2. Solo hacer UNA pregunta aclaratoria si realmente falta información crítica.
+3. En cuanto tenés suficiente info, generá el PRD y las tareas SIN más preguntas.
+
+REGLA CLAVE: Si el usuario ya describió lo que quiere (proyecto, archivos, cambios), NO preguntes más — generá las tareas de inmediato.
+
+Cuando tengas suficiente contexto, incluí AMBOS bloques:
 <PRD>
 [PRD completo en markdown]
 </PRD>
@@ -130,7 +135,7 @@ Cuando estés listo para generar las tareas, incluí AMBOS bloques en tu respues
 [
   {
     "title": "Título de la tarea",
-    "description": "Descripción detallada",
+    "description": "Descripción detallada con ruta de archivo si aplica",
     "successCriteria": "Cómo verificar que está completa",
     "priority": "high|medium|low"
   }
@@ -138,28 +143,26 @@ Cuando estés listo para generar las tareas, incluí AMBOS bloques en tu respues
 </TASKS>
 
 Reglas:
-- Hacé una pregunta aclaratoria a la vez. Respondé de forma concisa.
-- Generá entre 3 y 8 tareas con criterios de éxito concretos e independientemente verificables.
-- Solo emitir los bloques <PRD> y <TASKS> cuando tenés suficiente contexto.
-- Respondé SIEMPRE en español argentino. Nunca en inglés.`;
+- Respondé SIEMPRE en español argentino. Nunca en inglés.
+- Generá entre 3 y 8 tareas concretas e independientemente verificables.
+- Incluí rutas de archivos exactas en las descripciones cuando el usuario las mencione.`;
 
   const historyText = conversationHistory
-    .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+    .map(m => `${m.role === 'user' ? 'Usuario' : 'Orquestador'}: ${m.content}`)
     .join('\n\n');
 
-  const fullPrompt = `${systemPrompt}\n\nConversation so far:\n${historyText}\n\nAssistant:`;
+  const fullPrompt = `${systemPrompt}\n\n--- CONVERSACIÓN ACTUAL ---\n${historyText}\n\nOrquestador:`;
 
-  // claude --print requires the prompt as a positional argument (not stdin)
-  // On Windows, use cmd /c to invoke .cmd files without shell:true deprecation warning
-  const spawnArgs = process.platform === 'win32'
-    ? ['cmd', ['/c', 'claude', '--permission-mode', 'bypassPermissions', '--print', fullPrompt]]
-    : ['claude', ['--permission-mode', 'bypassPermissions', '--print', fullPrompt]];
-
-  const proc = spawn(spawnArgs[0], spawnArgs[1], {
+  // Use stdin to pass prompt — avoids Windows cmd line length limits
+  // shell:true needed on Windows to resolve .cmd files; args are all fixed strings (no user data)
+  const proc = spawn(CLAUDE_CMD, ['--permission-mode', 'bypassPermissions', '--print'], {
     cwd: process.cwd(),
-    stdio: ['ignore', 'pipe', 'pipe'],
-    shell: false,
+    stdio: ['pipe', 'pipe', 'pipe'],
+    shell: process.platform === 'win32',
   });
+
+  proc.stdin.write(fullPrompt, 'utf8');
+  proc.stdin.end();
 
   let response = '';
 
