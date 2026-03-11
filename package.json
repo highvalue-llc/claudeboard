@@ -14,13 +14,20 @@
   "scripts": {
     "start": "node bin/cli.js"
   },
-  "keywords": ["claude", "ai", "orchestrator", "agents", "dashboard", "kanban"],
+  "keywords": [
+    "claude",
+    "ai",
+    "orchestrator",
+    "agents",
+    "dashboard",
+    "kanban"
+  ],
   "license": "MIT",
   "engines": {
     "node": ">=18"
   },
   "dependencies": {
-    "chalk": "^5.3.0",
+    "chalk": "^4.1.2",
     "commander": "^12.0.0",
     "express": "^4.18.2",
     "open": "^10.1.0",

@@ -3,6 +3,7 @@ const { spawn } = require('child_process');
 const { createTask, updateTask, getTask, getTasks, savePRD } = require('./store');
 const { runVerifier } = require('./verifier');
 const { notify } = require('./notifier');
+const { scanProject } = require('./scanner');
 
 // Use claude.cmd on Windows so spawn() works without shell: true
 const CLAUDE_CMD = process.platform === 'win32' ? 'claude.cmd' : 'claude';
@@ -25,11 +26,38 @@ function sanitizeInput(str) {
 // In-memory conversation state (not persisted to disk)
 let conversationHistory = [];
 let orchBuffer = '';
+let projectContext = null;
+
+function buildGreeting(ctx) {
+  if (ctx.isNewProject) {
+    const stackInfo = ctx.techStack.length > 0
+      ? ` I can see you're working with ${ctx.techStack.join(', ')}.`
+      : '';
+    return `¡Hola! Soy tu Orquestador. Voy a coordinar tu equipo de agentes IA para **${ctx.projectName}**.${stackInfo} ¿Qué querés construir?`;
+  }
+
+  // Existing project — reference what's already there
+  const stackInfo = ctx.techStack.length > 0
+    ? ` (${ctx.techStack.join(', ')})`
+    : '';
+  return `¡Bienvenido de vuelta! Veo que **${ctx.projectName}**${stackInfo} ya tiene un PRD. ¿Querés continuar donde lo dejaste, agregar más tareas o empezar de nuevo?`;
+}
 
 function startOrchestrator() {
   conversationHistory = [];
   orchBuffer = '';
-  const greeting = "Hi! I'm your Orchestrator. Tell me what you'd like to build and I'll coordinate your AI development team.";
+
+  try {
+    projectContext = scanProject();
+  } catch (err) {
+    console.warn('[orchestrator] scanner error:', err.message);
+    projectContext = null;
+  }
+
+  const greeting = projectContext
+    ? buildGreeting(projectContext)
+    : "¡Hola! Soy tu Orquestador. Contame qué querés construir y coordino tu equipo de agentes IA.";
+
   if (broadcast) broadcast({ type: 'orchestrator:chunk', chunk: greeting });
 }
 
@@ -66,31 +94,54 @@ function sendMessage(rawMessage) {
   conversationHistory.push({ role: 'user', content: message });
   if (broadcast) broadcast({ type: 'orchestrator:thinking' });
 
-  const systemPrompt = `You are an expert software project orchestrator embedded in ClaudeBoard.
+  // Build project context section for the system prompt
+  let projectSection = '';
+  if (projectContext) {
+    const lines = [];
+    lines.push(`## Project Context`);
+    lines.push(`- **Name**: ${projectContext.projectName}`);
+    if (projectContext.techStack.length > 0) {
+      lines.push(`- **Tech stack**: ${projectContext.techStack.join(', ')}`);
+    }
+    if (projectContext.pkgDescription) {
+      lines.push(`- **Description**: ${projectContext.pkgDescription}`);
+    }
+    if (projectContext.readme) {
+      lines.push(`\n### README (excerpt)\n${projectContext.readme.slice(0, 1000)}`);
+    }
+    if (projectContext.existingPrd) {
+      lines.push(`\n### Existing PRD\n${projectContext.existingPrd.slice(0, 2000)}`);
+    }
+    lines.push(`\n### File tree\n\`\`\`\n${projectContext.fileTree.slice(0, 2000)}\n\`\`\``);
+    projectSection = '\n\n' + lines.join('\n');
+  }
 
-Your job:
-1. Interview the user to understand what they want to build (2-3 exchanges max).
-2. Once you have enough context, generate a PRD and break it into concrete tasks.
+  const systemPrompt = `Sos un orquestador experto de proyectos de software dentro de ClaudeBoard. Respondé SIEMPRE en español argentino, de forma casual y directa.${projectSection}
 
-When ready to generate tasks, include BOTH blocks in your response:
+Tu trabajo:
+1. Entrevistar al usuario para entender qué quiere construir (máximo 2-3 intercambios).
+2. Una vez que tenés suficiente contexto, generar un PRD y desglosarlo en tareas concretas.
+
+Cuando estés listo para generar las tareas, incluí AMBOS bloques en tu respuesta:
 <PRD>
-[Full PRD in markdown]
+[PRD completo en markdown]
 </PRD>
 <TASKS>
 [
   {
-    "title": "Task title",
-    "description": "Detailed description",
-    "successCriteria": "How to verify completion",
+    "title": "Título de la tarea",
+    "description": "Descripción detallada",
+    "successCriteria": "Cómo verificar que está completa",
     "priority": "high|medium|low"
   }
 ]
 </TASKS>
 
-Rules:
-- Ask one clarifying question at a time. Keep replies concise.
-- Generate 3-8 tasks with concrete, independently verifiable success criteria.
-- Only output the <PRD> and <TASKS> blocks when you truly have enough context.`;
+Reglas:
+- Hacé una pregunta aclaratoria a la vez. Respondé de forma concisa.
+- Generá entre 3 y 8 tareas con criterios de éxito concretos e independientemente verificables.
+- Solo emitir los bloques <PRD> y <TASKS> cuando tenés suficiente contexto.
+- Respondé SIEMPRE en español argentino. Nunca en inglés.`;
 
   const historyText = conversationHistory
     .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
@@ -98,15 +149,17 @@ Rules:
 
   const fullPrompt = `${systemPrompt}\n\nConversation so far:\n${historyText}\n\nAssistant:`;
 
-  // Spawn without shell — prompt delivered via stdin only, never via argv
-  const proc = spawn(CLAUDE_CMD, ['--print'], {
+  // claude --print requires the prompt as a positional argument (not stdin)
+  // On Windows, use cmd /c to invoke .cmd files without shell:true deprecation warning
+  const spawnArgs = process.platform === 'win32'
+    ? ['cmd', ['/c', 'claude', '--permission-mode', 'bypassPermissions', '--print', fullPrompt]]
+    : ['claude', ['--permission-mode', 'bypassPermissions', '--print', fullPrompt]];
+
+  const proc = spawn(spawnArgs[0], spawnArgs[1], {
     cwd: process.cwd(),
-    stdio: ['pipe', 'pipe', 'pipe'],
+    stdio: ['ignore', 'pipe', 'pipe'],
     shell: false,
   });
-
-  proc.stdin.write(fullPrompt);
-  proc.stdin.end();
 
   let response = '';
 
@@ -153,7 +206,7 @@ Work in the current directory. Be thorough and follow best practices.`;
   const proc = spawn(CLAUDE_CMD, ['--permission-mode', 'bypassPermissions', '--print'], {
     cwd: process.cwd(),
     stdio: ['pipe', 'pipe', 'pipe'],
-    shell: false,
+    shell: process.platform === 'win32',
   });
 
   proc.stdin.write(prompt);

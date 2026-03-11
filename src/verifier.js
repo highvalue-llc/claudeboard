@@ -30,15 +30,16 @@ Review the relevant files in the current working directory. Respond with exactly
   broadcast({ type: 'task:verifying', taskId: task.id });
   updateTask(task.id, { status: 'verifying' });
 
-  // Spawn without shell — prompt via stdin only
-  const proc = spawn(CLAUDE_CMD, ['--print'], {
+  // claude --print requires prompt as positional arg; use cmd /c on Windows to avoid shell:true
+  const spawnArgs = process.platform === 'win32'
+    ? ['cmd', ['/c', 'claude', '--permission-mode', 'bypassPermissions', '--print', prompt]]
+    : ['claude', ['--permission-mode', 'bypassPermissions', '--print', prompt]];
+
+  const proc = spawn(spawnArgs[0], spawnArgs[1], {
     cwd: process.cwd(),
-    stdio: ['pipe', 'pipe', 'pipe'],
+    stdio: ['ignore', 'pipe', 'pipe'],
     shell: false,
   });
-
-  proc.stdin.write(prompt);
-  proc.stdin.end();
 
   let output = '';
 

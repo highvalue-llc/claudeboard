@@ -165,7 +165,7 @@ function handleMessage(msg) {
       handleTaskError(msg.taskId, msg.error);
       break;
 
-    case 'prd:ready':
+    case 'prd:generated':
       state.prdAvailable = true;
       dom.prdBtn.style.display = 'inline-flex';
       break;
@@ -191,18 +191,7 @@ function handleInit(msg) {
     }
   }
 
-  // Load chat history
-  if (msg.chatHistory && Array.isArray(msg.chatHistory)) {
-    msg.chatHistory.forEach(entry => {
-      if (entry.role === 'user') {
-        appendChatMessage('user', entry.content);
-      } else if (entry.role === 'assistant') {
-        appendChatMessage('assistant', entry.content);
-      }
-    });
-  }
-
-  if (msg.prdAvailable) {
+  if (msg.prd != null) {
     state.prdAvailable = true;
     dom.prdBtn.style.display = 'inline-flex';
   }
@@ -551,7 +540,7 @@ function sendMessage() {
   appendChatMessage('user', text);
   state.chatHistory.push({ role: 'user', content: text });
 
-  sendWS({ type: 'chat', message: text });
+  sendWS({ type: 'orchestrator:message', text });
   showTypingIndicator(true);
 }
 
@@ -661,8 +650,9 @@ async function openPRD() {
   try {
     const res = await fetch('/api/prd');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const text = await res.text();
-    dom.prdContent.innerHTML = renderMarkdown(text);
+    const data = await res.json();
+    const md = data.prd || '';
+    dom.prdContent.innerHTML = renderMarkdown(md);
   } catch (err) {
     dom.prdContent.textContent = `Failed to load PRD: ${err.message}`;
   }
