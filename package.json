@@ -1,0 +1,29 @@
+{
+  "name": "claudeboard",
+  "version": "3.0.0",
+  "description": "Visual orchestrator for Claude Code agent teams",
+  "bin": {
+    "claudeboard": "bin/cli.js"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "public/",
+    "README.md"
+  ],
+  "scripts": {
+    "start": "node bin/cli.js"
+  },
+  "keywords": ["claude", "ai", "orchestrator", "agents", "dashboard", "kanban"],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "commander": "^12.0.0",
+    "express": "^4.18.2",
+    "open": "^10.1.0",
+    "ws": "^8.16.0"
+  }
+}

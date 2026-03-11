@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClaudeBoard v3</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Sidebar: Orchestrator Chat -->
+    <aside id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <span class="logo-icon">◆</span>
+          <span class="logo-text">ClaudeBoard</span>
+          <span class="logo-version">v3</span>
+        </div>
+        <div class="connection-status" id="connStatus">
+          <span class="dot"></span>
+          <span>Connecting...</span>
+        </div>
+      </div>
+
+      <div class="chat-container" id="chatMessages">
+        <div class="chat-welcome">
+          <div class="welcome-icon">◆</div>
+          <h3>Orchestrator Agent</h3>
+          <p>Tell me what you want to build and I'll coordinate your AI team.</p>
+        </div>
+      </div>
+
+      <div class="chat-input-area">
+        <div class="typing-indicator" id="typingIndicator" style="display:none">
+          <span></span><span></span><span></span>
+        </div>
+        <div class="input-row">
+          <textarea id="chatInput" placeholder="What do you want to build?" rows="2"></textarea>
+          <button id="sendBtn" class="btn-send">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main: Kanban Board -->
+    <main id="main">
+      <div class="main-header">
+        <h1>Project Board</h1>
+        <div class="board-actions">
+          <button class="btn-secondary" id="prdBtn" style="display:none">View PRD</button>
+          <button class="btn-primary" id="runAllBtn" style="display:none">&#9654; Run All Tasks</button>
+        </div>
+      </div>
+
+      <div class="kanban-board" id="kanbanBoard">
+        <div class="kanban-col" data-status="backlog">
+          <div class="col-header">
+            <span class="col-icon">&#128203;</span>
+            <span class="col-title">Backlog</span>
+            <span class="col-count" id="count-backlog">0</span>
+          </div>
+          <div class="col-cards" id="col-backlog"></div>
+        </div>
+        <div class="kanban-col" data-status="in_progress">
+          <div class="col-header">
+            <span class="col-icon">&#9889;</span>
+            <span class="col-title">In Progress</span>
+            <span class="col-count" id="count-in_progress">0</span>
+          </div>
+          <div class="col-cards" id="col-in_progress"></div>
+        </div>
+        <div class="kanban-col" data-status="verifying">
+          <div class="col-header">
+            <span class="col-icon">&#128269;</span>
+            <span class="col-title">Verifying</span>
+            <span class="col-count" id="count-verifying">0</span>
+          </div>
+          <div class="col-cards" id="col-verifying"></div>
+        </div>
+        <div class="kanban-col" data-status="done">
+          <div class="col-header">
+            <span class="col-icon">&#9989;</span>
+            <span class="col-title">Done</span>
+            <span class="col-count" id="count-done">0</span>
+          </div>
+          <div class="col-cards" id="col-done"></div>
+        </div>
+        <div class="kanban-col" data-status="error">
+          <div class="col-header">
+            <span class="col-icon">&#10060;</span>
+            <span class="col-title">Error</span>
+            <span class="col-count" id="count-error">0</span>
+          </div>
+          <div class="col-cards" id="col-error"></div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Bottom Terminal Drawer -->
+    <div id="terminal-drawer" class="terminal-drawer closed">
+      <div class="terminal-header" id="terminalToggle">
+        <div class="terminal-title">
+          <span class="terminal-icon">&#9656;</span>
+          <span id="terminalTaskName">Select a task to view output</span>
+        </div>
+        <div class="terminal-controls">
+          <button class="btn-icon" id="clearTerminal">Clear</button>
+          <button class="btn-icon" id="closeTerminal">&#10005;</button>
+        </div>
+      </div>
+      <div class="terminal-body" id="terminalBody">
+        <div class="terminal-placeholder">Click on a task card to view its live output here.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRD Modal -->
+  <div id="prdModal" class="modal" style="display:none">
+    <div class="modal-backdrop" onclick="closePRD()"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Project Requirements Document</h2>
+        <button class="btn-icon" onclick="closePRD()">&#10005;</button>
+      </div>
+      <div class="modal-body" id="prdContent"></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
