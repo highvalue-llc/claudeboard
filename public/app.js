@@ -5,6 +5,21 @@
 
 'use strict';
 
+// ── Simple Markdown Renderer ─────────────────────────────────
+function renderMarkdown(text) {
+  return text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/^### (.+)$/gm, '<strong>$1</strong>')
+    .replace(/^## (.+)$/gm, '<strong style="font-size:1.05em">$1</strong>')
+    .replace(/^# (.+)$/gm, '<strong style="font-size:1.1em">$1</strong>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`(.+?)`/g, '<code style="background:rgba(227,198,154,0.15);padding:0 4px;border-radius:3px">$1</code>')
+    .replace(/^- (.+)$/gm, '• $1')
+    .replace(/^\d+\. (.+)$/gm, (_, item) => `• ${item}`)
+    .replace(/\n/g, '<br>');
+}
+
 // ── State ────────────────────────────────────────────────────
 const state = {
   ws: null,
@@ -555,11 +570,15 @@ function appendChatMessage(role, content) {
 
   const label = document.createElement('span');
   label.className = 'message-label';
-  label.textContent = role === 'user' ? 'You' : 'Orchestrator';
+  label.textContent = role === 'user' ? 'Vos' : 'Orquestador';
 
   const bubble = document.createElement('div');
   bubble.className = 'message-bubble';
-  bubble.textContent = content;
+  if (role === 'assistant') {
+    bubble.innerHTML = renderMarkdown(content);
+  } else {
+    bubble.textContent = content;
+  }
 
   wrapper.appendChild(label);
   wrapper.appendChild(bubble);
@@ -603,11 +622,12 @@ function handleOrchestratorChunk(chunk) {
 
     const label = document.createElement('span');
     label.className = 'message-label';
-    label.textContent = 'Orchestrator';
+    label.textContent = 'Orquestador';
 
     const bubble = document.createElement('div');
     bubble.className = 'message-bubble streaming-cursor';
     bubble.textContent = '';
+    bubble._rawText = '';
 
     wrapper.appendChild(label);
     wrapper.appendChild(bubble);
@@ -619,17 +639,19 @@ function handleOrchestratorChunk(chunk) {
     state.currentAssistantMsgEl = bubble;
   }
 
-  state.currentAssistantMsgEl.textContent += chunk;
+  state.currentAssistantMsgEl._rawText = (state.currentAssistantMsgEl._rawText || '') + chunk;
+  state.currentAssistantMsgEl.innerHTML = renderMarkdown(state.currentAssistantMsgEl._rawText) + '<span class="cursor-blink">▊</span>';
   scrollChatToBottom();
 }
 
 function finalizeAssistantMessage() {
   if (state.currentAssistantMsgEl) {
     state.currentAssistantMsgEl.classList.remove('streaming-cursor');
-    const content = state.currentAssistantMsgEl.textContent;
-    if (content) {
-      state.chatHistory.push({ role: 'assistant', content });
-    }
+    const raw = state.currentAssistantMsgEl._rawText || state.currentAssistantMsgEl.textContent;
+    // Hide <PRD> and <TASKS> blocks from chat — they're internal signals
+    const display = raw.replace(/<PRD>[\s\S]*?<\/PRD>/g, '').replace(/<TASKS>[\s\S]*?<\/TASKS>/g, '✅ Tareas creadas — revisá el board →').trim();
+    state.currentAssistantMsgEl.innerHTML = renderMarkdown(display);
+    if (raw) state.chatHistory.push({ role: 'assistant', content: raw });
     state.currentAssistantMsgEl = null;
   }
 }

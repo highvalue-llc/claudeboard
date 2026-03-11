@@ -100,7 +100,17 @@ function handleOrchOutput(text) {
   const tasksMatch = orchBuffer.match(/<TASKS>([\s\S]*?)<\/TASKS>/);
   if (tasksMatch) {
     try {
-      const taskDefs = JSON.parse(tasksMatch[1].trim());
+      let raw = tasksMatch[1].trim();
+      // Strip markdown code fences (```json ... ```) that Claude sometimes adds
+      raw = raw.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
+      // Remove JS-style comments (// ...) that Claude sometimes adds
+      raw = raw.replace(/\/\/[^\n]*/g, '');
+      // Replace single-quoted strings with double quotes (common Claude mistake)
+      raw = raw.replace(/'([^'\\]*(\\.[^'\\]*)*)'/g, '"$1"');
+      // Remove trailing commas before } or ]
+      raw = raw.replace(/,\s*([\]}])/g, '$1');
+
+      const taskDefs = JSON.parse(raw);
       if (Array.isArray(taskDefs)) {
         const created = taskDefs.map(t => createTask(t));
         if (broadcast) broadcast({ type: 'tasks:created', tasks: created });
@@ -110,6 +120,8 @@ function handleOrchOutput(text) {
       }
     } catch (e) {
       console.error('[orchestrator] failed to parse tasks:', e.message);
+      // Retry: ask claude to fix the JSON
+      if (broadcast) broadcast({ type: 'orchestrator:chunk', chunk: '\n\n⚠️ Hubo un error al parsear las tareas. Por favor respondé solo con el bloque <TASKS> con JSON válido.' });
     }
   }
 }
