@@ -182,27 +182,31 @@ function sendMessage(rawMessage, imageData = null) {
 
   const systemPrompt = `Sos el orquestador de ClaudeBoard. Español argentino, directo, sin rodeos.${projectSection}
 
-Conversación en curso — no te presentes. Si el usuario describió lo que quiere, generá las tareas YA.
+REGLA PRINCIPAL: Si el usuario describe cualquier cambio o tarea de código, SIEMPRE generá el bloque <TASKS> con JSON válido. Nunca respondas solo con texto cuando hay trabajo de código que hacer. No preguntes — actuá.
 
-Cuando tengas suficiente contexto, incluí estos dos bloques (sin excepciones):
+Cuando tengas lo que necesitás, respondé con EXACTAMENTE este formato (nada más):
 
 <PRD>
-Descripción breve del objetivo y cambios clave.
+Descripción breve del objetivo.
 </PRD>
 <TASKS>
-<TASK>
-title: Título concreto de la tarea
-description: Qué hacer exactamente, con ruta de archivo si aplica
-successCriteria: Cómo verificar que está lista
-priority: high|medium|low
-</TASK>
+[
+  {
+    "title": "Título de la tarea",
+    "description": "Descripción exacta con ruta de archivo completa si aplica",
+    "successCriteria": "Cómo verificar que está lista",
+    "priority": "high"
+  }
+]
 </TASKS>
 
-Reglas:
-- 3 a 8 tareas concretas e independientes.
-- Cada tarea va en su propio bloque <TASK>...</TASK>.
-- No uses JSON, no uses comillas, solo el formato de arriba.
-- Rutas de archivos exactas en description cuando el usuario las mencione.`;
+CRÍTICO para el JSON:
+- Usá SIEMPRE comillas dobles, nunca simples
+- Sin comas al final del último elemento
+- Sin comentarios dentro del JSON
+- Entre 2 y 6 tareas concretas e independientes
+- Rutas de archivos completas (ej: C:/Users/Eve/.openclaw/workspace/taller-dueno-startup/index.html)
+- Si el usuario ya describió lo que quiere con detalle, generá las tareas DIRECTAMENTE sin preguntar más`;
 
   const historyText = conversationHistory
     .map(m => `${m.role === 'user' ? 'Usuario' : 'Orquestador'}: ${m.content}`)

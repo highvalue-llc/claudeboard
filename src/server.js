@@ -31,6 +31,25 @@ function createServer(options = {}) {
     catch { res.status(500).json({ error: 'Failed to read PRD' }); }
   });
 
+  // Create a task externally (e.g. from scripts or other tools)
+  app.post('/api/tasks', (req, res) => {
+    try {
+      const { title, description, successCriteria, priority } = req.body || {};
+      if (!title || !description) return res.status(400).json({ error: 'title and description are required' });
+      const task = createTask({
+        title: String(title).slice(0, 200),
+        description: String(description).slice(0, 4000),
+        successCriteria: successCriteria ? String(successCriteria).slice(0, 1000) : '',
+        priority: ['high','medium','low'].includes(priority) ? priority : 'medium',
+      });
+      if (wss) wss.clients.forEach(c => { if (c.readyState === 1) c.send(JSON.stringify({ type: 'tasks:created', tasks: [task] })); });
+      processQueue();
+      res.json(task);
+    } catch (e) {
+      res.status(500).json({ error: 'Failed to create task' });
+    }
+  });
+
   // Start a specific backlog task — ID validated before acting
   app.post('/api/tasks/:id/start', (req, res) => {
     const { id } = req.params;
