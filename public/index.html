@@ -13,10 +13,13 @@
     <!-- Sidebar: Orquestador Chat -->
     <aside id="sidebar">
       <div class="sidebar-header">
-        <div class="logo">
-          <span class="logo-icon">◆</span>
-          <span class="logo-text">ClaudeBoard</span>
-          <span class="logo-version">v3</span>
+        <div class="sidebar-header-top">
+          <div class="logo">
+            <span class="logo-icon">◆</span>
+            <span class="logo-text">ClaudeBoard</span>
+            <span class="logo-version">v3</span>
+          </div>
+          <button class="sidebar-collapse-btn" id="sidebarCollapseBtn" title="Colapsar chat">&#9666;</button>
         </div>
         <div class="connection-status" id="connStatus">
           <span class="dot"></span>
@@ -36,7 +39,17 @@
         <div class="typing-indicator" id="typingIndicator" style="display:none">
           <span></span><span></span><span></span>
         </div>
+        <div id="imgPreview" class="img-preview" style="display:none">
+          <img id="imgPreviewImg" src="" alt="preview">
+          <button id="removeImg" class="btn-icon btn-remove-img">&#10005;</button>
+        </div>
         <div class="input-row">
+          <label class="btn-attach" for="imgAttach" title="Adjuntar imagen">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"></path>
+            </svg>
+            <input type="file" id="imgAttach" accept="image/*" style="display:none">
+          </label>
           <textarea id="chatInput" placeholder="&iquest;Qu&eacute; quer&eacute;s construir?" rows="2"></textarea>
           <button id="sendBtn" class="btn-send">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -51,9 +64,15 @@
     <!-- Main: Kanban Board -->
     <main id="main">
       <div class="main-header">
-        <h1>Project Board</h1>
+        <div class="main-header-left">
+          <button class="btn-icon sidebar-expand-btn" id="sidebarExpandBtn" style="display:none" title="Expandir chat">&#9667; Chat</button>
+          <h1>Project Board</h1>
+        </div>
+        <div class="sys-monitor" id="sysMonitor" title="CPU y RAM del sistema"></div>
         <div class="board-actions">
           <button class="btn-secondary" id="prdBtn" style="display:none">View PRD</button>
+          <button class="btn-secondary btn-qa" id="qaBtn" style="display:none" title="Abrir Chrome, capturar pantalla y crear tareas de corrección si algo falla">&#128269; Revisar en Chrome</button>
+          <button class="btn-danger" id="pauseAllBtn" style="display:none">&#9646;&#9646; Pause All</button>
           <button class="btn-primary" id="runAllBtn" style="display:none">&#9654; Run All Tasks</button>
         </div>
       </div>
@@ -96,26 +115,44 @@
             <span class="col-icon">&#10060;</span>
             <span class="col-title">Error</span>
             <span class="col-count" id="count-error">0</span>
+            <button class="btn-redo-errors" id="redoErrorsBtn" title="Reintentar todas">&#8635;</button>
           </div>
           <div class="col-cards" id="col-error"></div>
         </div>
       </div>
     </main>
 
-    <!-- Bottom Terminal Drawer -->
-    <div id="terminal-drawer" class="terminal-drawer closed">
-      <div class="terminal-header" id="terminalToggle">
-        <div class="terminal-title">
-          <span class="terminal-icon">&#9656;</span>
-          <span id="terminalTaskName">Select a task to view output</span>
+    <!-- Right Detail Panel -->
+    <div id="detail-panel" class="detail-panel">
+      <div class="panel-header">
+        <div class="panel-header-left">
+          <span id="panelBadge"></span>
+          <span id="panelAgentLabel" class="panel-agent-label"></span>
         </div>
-        <div class="terminal-controls">
-          <button class="btn-icon" id="clearTerminal">Clear</button>
-          <button class="btn-icon" id="closeTerminal">&#10005;</button>
+        <div class="panel-header-right">
+          <span id="panelElapsed" class="panel-elapsed"></span>
+          <button class="btn-icon" id="closePanel">&#10005;</button>
         </div>
       </div>
-      <div class="terminal-body" id="terminalBody">
-        <div class="terminal-placeholder">Hac&eacute; click en una tarea para ver el output en vivo ac&aacute;.</div>
+      <div class="panel-body">
+        <h2 id="panelTaskName" class="panel-task-name">—</h2>
+        <div class="panel-section">
+          <span class="panel-section-label">Descripción</span>
+          <p id="panelTaskDesc" class="panel-task-desc"></p>
+        </div>
+        <div class="panel-section" id="panelCriteriaWrap">
+          <span class="panel-section-label">Criterio de éxito</span>
+          <p id="panelCriteria" class="panel-task-desc"></p>
+        </div>
+      </div>
+      <div class="panel-terminal-wrap">
+        <div class="panel-terminal-header">
+          <span class="panel-terminal-label">&#9654; Live output</span>
+          <button class="btn-icon" id="clearPanelTerminal">Clear</button>
+        </div>
+        <div class="panel-terminal-body" id="panelTerminalBody">
+          <div class="terminal-placeholder">Seleccioná una tarea para ver el output en vivo.</div>
+        </div>
       </div>
     </div>
   </div>
@@ -130,6 +167,12 @@
       </div>
       <div class="modal-body" id="prdContent"></div>
     </div>
+  </div>
+
+  <!-- QA Status Toast -->
+  <div id="qaToast" class="qa-toast" style="display:none">
+    <span class="qa-toast-icon">&#128269;</span>
+    <span id="qaToastText">Agente QA revisando el proyecto…</span>
   </div>
 
   <script src="app.js"></script>

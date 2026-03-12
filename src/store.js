@@ -113,9 +113,39 @@ function getPRD() {
   return fs.existsSync(p) ? fs.readFileSync(p, 'utf-8') : null;
 }
 
+function getProjectPath() {
+  const config = getConfig();
+  return config.projectPath || process.cwd();
+}
+
+// Chat history — persisted to disk
+function getChatHistory() {
+  return readJSON('chat-history.json', []);
+}
+
+function appendChatHistory(entry) {
+  const history = getChatHistory();
+  history.push({ ...entry, timestamp: new Date().toISOString() });
+  writeJSON('chat-history.json', history.slice(-500)); // keep last 500 messages
+}
+
+// Save base64 image from chat to disk, returns absolute path
+function saveChatImage(base64Data) {
+  const match = typeof base64Data === 'string' && base64Data.match(/^data:image\/(\w+);base64,(.+)$/);
+  if (!match) return null;
+  const ext = match[1] === 'jpeg' ? 'jpg' : match[1];
+  const filename = `chat-image-${Date.now()}.${ext}`;
+  const dir = ensureDir();
+  const filepath = path.join(dir, filename);
+  fs.writeFileSync(filepath, Buffer.from(match[2], 'base64'));
+  return filepath;
+}
+
 module.exports = {
   getTasks, saveTasks, createTask, updateTask, getTask,
   getAgents, createAgent, updateAgent, removeAgent,
   getConfig, setConfig,
   savePRD, getPRD,
+  getProjectPath,
+  getChatHistory, appendChatHistory, saveChatImage,
 };

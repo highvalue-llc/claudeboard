@@ -3,7 +3,7 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { updateTask, createTask } = require('./store');
+const { updateTask, createTask, getTask, getProjectPath } = require('./store');
 const { notify } = require('./notifier');
 
 function spawnClaude(prompt, cwd) {
@@ -23,34 +23,43 @@ function spawnClaude(prompt, cwd) {
   child.on('close', () => { try { fs.unlinkSync(tmpFile); } catch (_) {} });
   return child;
 }
+
 const MAX_FIELD_LEN = 2000;
+const MAX_RETRIES = 2;
 
 function sanitizeField(str) {
   if (typeof str !== 'string') return '';
   return str.replace(/\0/g, '').slice(0, MAX_FIELD_LEN);
 }
 
-function runVerifier(task, broadcast) {
-  // Sanitize task fields — they originate from LLM output, not directly from user
+function runVerifier(task, broadcast, onRetry) {
   const title = sanitizeField(task.title);
   const description = sanitizeField(task.description);
   const successCriteria = sanitizeField(task.successCriteria);
+  const agentOutput = sanitizeField(typeof task.output === 'string' ? task.output.slice(-2000) : '');
+  const projectPath = getProjectPath();
 
-  const prompt = `You are a code verification agent. Check if the following task was completed correctly.
+  const prompt = `You are a code verifier. Check if this task was completed correctly.
 
 Task: ${title}
-Description: ${description}
-Success Criteria: ${successCriteria}
+Success criteria: ${successCriteria}
+Project directory: ${projectPath}
 
-Review the relevant files in the current working directory. Respond with exactly one of:
-- VERIFIED  (if the task meets the success criteria)
-- FAILED: <brief reason>  (if the task is incomplete or incorrect)`;
+What the agent did:
+${agentOutput || '(no output)'}
+
+Instructions:
+1. Read the relevant files in the project directory to check the actual result.
+2. Your ENTIRE response must be ONE of these two formats, nothing else:
+   VERIFIED
+   FAILED: <one sentence reason>
+
+Do not add explanations, greetings, or any other text. Start your response with VERIFIED or FAILED.`;
 
   broadcast({ type: 'task:verifying', taskId: task.id });
   updateTask(task.id, { status: 'verifying' });
 
-  const proc = spawnClaude(prompt, process.cwd());
-
+  const proc = spawnClaude(prompt, projectPath);
   let output = '';
 
   proc.stdout.on('data', (data) => {
@@ -59,38 +68,59 @@ Review the relevant files in the current working directory. Respond with exactly
     broadcast({ type: 'task:verifier_output', taskId: task.id, chunk });
   });
 
-  proc.stderr.on('data', () => {
-    // Swallow — don't expose system paths to the client
-  });
+  proc.stderr.on('data', () => {});
 
   proc.on('close', () => {
     const trimmed = output.trim();
-    if (trimmed.startsWith('VERIFIED')) {
+    // Flexible parsing: check anywhere in the first 300 chars
+    const head = trimmed.slice(0, 300).toUpperCase();
+    const isVerified = head.includes('VERIFIED') && !head.includes('FAILED');
+
+    if (isVerified) {
       updateTask(task.id, { status: 'done', verifierOutput: trimmed.slice(0, 500) });
       broadcast({ type: 'task:done', taskId: task.id });
       notify('task:completed', { taskTitle: task.title, status: 'done' });
-    } else {
-      const reason = trimmed.startsWith('FAILED:')
-        ? trimmed.slice(7).trim().slice(0, 500)
-        : 'Verification did not return an expected response';
-      updateTask(task.id, { status: 'error', verifierOutput: trimmed.slice(0, 500) });
-      broadcast({ type: 'task:error', taskId: task.id, reason });
-      notify('task:failed', { taskTitle: task.title, status: 'error' });
+      return;
+    }
 
-      const fixTask = createTask({
-        title: `Fix: ${task.title}`,
-        description: `Previous attempt failed.\nReason: ${reason}\n\nOriginal task: ${task.description}`,
-        successCriteria: task.successCriteria,
-        priority: task.priority,
+    // Extract failure reason
+    const failedMatch = trimmed.match(/FAILED[:\s]+(.+?)(?:\n|$)/i);
+    const reason = failedMatch
+      ? failedMatch[1].trim().slice(0, 300)
+      : trimmed.slice(0, 300) || 'Verificación sin respuesta esperada';
+
+    const retryCount = (task.retryCount || 0) + 1;
+
+    if (retryCount <= MAX_RETRIES) {
+      // Auto-retry: reset same task with more context
+      const enrichedDesc = `[Reintento ${retryCount}/${MAX_RETRIES}] Intento anterior falló: ${reason}\n\nTarea original: ${task.description}`;
+      updateTask(task.id, {
+        status: 'backlog',
+        output: '',
+        verifierOutput: reason,
+        retryCount,
+        description: enrichedDesc.slice(0, 2000),
       });
-      broadcast({ type: 'tasks:created', tasks: [fixTask] });
+      broadcast({ type: 'task:updated', task: getTask(task.id) });
+      notify('task:failed', { taskTitle: task.title, status: 'retrying' });
+      if (onRetry) onRetry();
+    } else {
+      // Human intervention needed
+      updateTask(task.id, {
+        status: 'error',
+        needsHuman: true,
+        humanReason: reason,
+        verifierOutput: trimmed.slice(0, 500),
+      });
+      broadcast({ type: 'task:error', taskId: task.id, reason, needsHuman: true });
+      notify('task:failed', { taskTitle: task.title, status: 'error' });
     }
   });
 
   proc.on('error', (err) => {
     console.error('[verifier] spawn error:', err.message);
+    updateTask(task.id, { status: 'error', needsHuman: false });
     broadcast({ type: 'task:error', taskId: task.id, reason: 'Verifier process failed to start' });
-    updateTask(task.id, { status: 'error' });
   });
 }
 

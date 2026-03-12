@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"C:\\\\Users\\\\Eve\\\\.openclaw\\\\workspace\\\\claudeboard-v3\" && node -e \"require\\('./src/store'\\); require\\('./src/orchestrator'\\); console.log\\('OK'\\)\" 2>&1)",
+      "Bash(cd \"C:\\\\Users\\\\Eve\\\\.openclaw\\\\workspace\\\\claudeboard-v3\" && node -e \"require\\('./src/server'\\); console.log\\('OK'\\)\" 2>&1 | head -5)",
+      "Bash(cd \"C:\\\\Users\\\\Eve\\\\.openclaw\\\\workspace\\\\claudeboard-v3\" && node -e \"require\\('./src/orchestrator'\\); require\\('./src/server'\\); console.log\\('OK'\\)\" 2>&1)",
+      "Bash(cd \"C:\\\\Users\\\\Eve\\\\.openclaw\\\\workspace\\\\claudeboard-v3\" && node -e \"require\\('./src/orchestrator'\\); console.log\\('OK'\\)\" 2>&1)"
+    ]
+  }
+}

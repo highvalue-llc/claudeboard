@@ -117,6 +117,15 @@ function scanProject() {
     }
   } catch { /* ignore */ }
 
+  // Read .claudeboard/context.md if present (cap at 8 KB)
+  let contextMd = null;
+  try {
+    const contextPath = path.join(projectDir, '.claudeboard', 'context.md');
+    if (fs.existsSync(contextPath)) {
+      contextMd = fs.readFileSync(contextPath, 'utf-8').slice(0, 8000);
+    }
+  } catch { /* ignore */ }
+
   // Build file tree
   const treeLines = buildFileTree(projectDir);
   const fileTree = treeLines.join('\n') || '(empty directory)';
@@ -131,6 +140,7 @@ function scanProject() {
     techStack,
     projectName,
     readme,
+    contextMd,
     pkgDescription: pkgJson?.description || null,
   };
 }
